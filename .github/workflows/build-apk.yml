@@ -10,7 +10,7 @@ on:
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -60,3 +60,54 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Create GitHub Release
+        id: create_release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="v1.0.${{ github.run_number }}"
+          echo "Creating release $TAG_NAME..."
+          gh release create "$TAG_NAME" \
+            "app/build/outputs/apk/debug/app-debug.apk#myra-assistant-debug.apk" \
+            --title "MYRA Assistant Debug APK $TAG_NAME" \
+            --notes "Automated build of Debug APK from branch ${{ github.ref_name }}. Commit: ${{ github.sha }}" \
+            --latest
+
+      - name: Report APK download result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### MYRA Assistant Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **APK Compilation**: Succeeded :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact Upload**: Succeeded :white_check_mark: (APK uploaded successfully as a workflow artifact)" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.create_release.outcome }}" = "success" ]; then
+            TAG_NAME="v1.0.${{ github.run_number }}"
+            echo "===================================================="
+            echo "SUCCESS: GitHub Release was published successfully!"
+            echo "===================================================="
+            gh release view "$TAG_NAME"
+            
+            # Fetch and display the exact URL of the uploaded APK asset
+            ASSET_URL=$(gh release view "$TAG_NAME" --json assets --jq '.assets[0].url')
+            echo "Download URL for the APK: $ASSET_URL"
+            
+            echo "- **GitHub Release**: Published successfully :rocket:" >> $GITHUB_STEP_SUMMARY
+            echo "- **Download APK Release Asset**: [$ASSET_URL]($ASSET_URL)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning:: GitHub Release step failed. Please note that the APK is still safely available as an artifact."
+            echo "===================================================="
+            echo "WARNING: The GitHub Release step failed or was skipped."
+            echo "However, the compiled APK is still safely available!"
+            echo "You can download it as a workflow artifact from this action run."
+            echo "To download:"
+            echo "1. Go to the Summary tab of this GitHub Actions run."
+            echo "2. Scroll down to the 'Artifacts' section."
+            echo "3. Click on 'myra-assistant-debug-apk' to download the ZIP file containing the APK."
+            echo "===================================================="
+            
+            echo "- **GitHub Release**: Failed or Skipped :warning: (But APK is still safely available as a workflow artifact below)" >> $GITHUB_STEP_SUMMARY
+          fi
