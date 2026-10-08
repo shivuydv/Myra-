@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MYRA Live</string>
+    <string name="accessibility_description">MYRA Screen Automation service simplifies screen interactions like clicking buttons, entering text, and swiping for hands-free assistant control.</string>
+</resources>

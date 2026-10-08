@@ -1,0 +1,6 @@
+{
+  "name": "MYRA Live Assistant",
+  "description": "A zero-delay real-time bidirectional voice assistant powered by Gemini Multimodal Live API and MYRA Accessibility Automation Engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
