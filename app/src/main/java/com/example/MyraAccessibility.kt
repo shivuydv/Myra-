@@ -128,7 +128,24 @@ class MyraAccessibilityService : AccessibilityService() {
             args
         )
     }
+
+    fun getVisibleElements(): List<AccessibilityNodeInfo> {
+        val root = rootInActiveWindow ?: return emptyList()
+        val list = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            list.add(node)
+            for (i in 0 until node.childCount) {
+                walk(node.getChild(i))
+            }
+        }
+        walk(root)
+        return list
+    }
 }
+
+typealias MyraAccessibility = MyraAccessibilityService
+
 
 object MyraScreenState {
     @Volatile var latestScreenshot: Bitmap? = null

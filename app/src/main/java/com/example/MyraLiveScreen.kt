@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.testTag
 
 @Composable
 fun MyraLiveScreen(
@@ -100,7 +101,10 @@ fun MyraLiveScreen(
                     )
                 }
 
-                IconButton(onClick = onOpenSettings) {
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.testTag("settings_button")
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Settings,
                         contentDescription = "Open Settings",
@@ -190,6 +194,7 @@ fun MyraLiveScreen(
                     .fillMaxWidth()
                     .height(56.dp)
                     .shadow(6.dp, RoundedCornerShape(14.dp))
+                    .testTag("start_stop_session_button")
             ) {
                 Text(
                     text = if (currentState == LiveState.IDLE) "Start Live Session" else "Stop Session",
@@ -343,11 +348,13 @@ fun StatusBadge(status: GeminiLiveStatus) {
 
 @Composable
 fun RowScope.SuggestionChip(text: String) {
+    val tag = text.lowercase().replace(Regex("[^a-z0-9]"), "_")
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .weight(1f)
+            .testTag("suggestion_chip_$tag")
     ) {
         Text(
             text = text,
@@ -434,10 +441,17 @@ fun PermissionRow(
         }
 
         if (!isGranted) {
+            val tag = label.lowercase()
+                .replace("(", "")
+                .replace(")", "")
+                .trim()
+                .replace(Regex("\\s+"), "_")
             Button(
                 onClick = onGrant,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                modifier = Modifier.height(28.dp),
+                modifier = Modifier
+                    .height(28.dp)
+                    .testTag("enable_$tag"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer

@@ -426,6 +426,7 @@ class MyraCore(
     val capabilityManager = MyraCapabilityManager()
 
     private var pendingAction: MyraAction? = null
+    private val gestureHandler = MyraGestureCommandHandler(context)
 
     init {
         capabilityManager.register(
@@ -485,6 +486,11 @@ class MyraCore(
         val clean =
             MyraCommandNormalizer()
                 .normalize(command)
+
+        if (gestureHandler.isGestureCommand(clean)) {
+            val result = gestureHandler.execute(clean)
+            return result.message
+        }
 
         val confirmation =
             pendingAction

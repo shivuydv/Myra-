@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,7 +76,10 @@ fun SettingsScreen(
                 .padding(bottom = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.testTag("back_button")
+            ) {
                 Icon(
                     imageVector = Icons.Filled.ArrowBack,
                     contentDescription = "Back",
@@ -106,7 +110,8 @@ fun SettingsScreen(
             placeholder = { Text("Gemini API Key yahan dalein") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 16.dp)
+                .testTag("gemini_key_input"),
             singleLine = true,
             visualTransformation = if (isGeminiVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -137,7 +142,8 @@ fun SettingsScreen(
             placeholder = { Text("ElevenLabs API Key yahan dalein") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp)
+                .testTag("elevenlabs_key_input"),
             singleLine = true,
             visualTransformation = if (isElevenLabsVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -216,6 +222,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
+                .testTag("save_changes_button")
         ) {
             Text(
                 text = "Save All Changes",
@@ -253,10 +260,17 @@ fun SettingsPermissionRow(
         }
 
         if (!isGranted) {
+            val tag = label.lowercase()
+                .replace("(", "")
+                .replace(")", "")
+                .trim()
+                .replace(Regex("\\s+"), "_")
             Button(
                 onClick = onGrant,
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
-                modifier = Modifier.height(30.dp),
+                modifier = Modifier
+                    .height(30.dp)
+                    .testTag("enable_$tag"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
