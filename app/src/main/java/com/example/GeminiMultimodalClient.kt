@@ -18,50 +18,49 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-enum class ConnectionStatus {
-    DISCONNECTED,
-    CONNECTING,
-    CONNECTED,
-    ERROR
-}
-
 class GeminiMultimodalClient {
     private val tag = "GeminiMultimodalClient"
 
-    private val _status = MutableStateFlow(ConnectionStatus.DISCONNECTED)
+    private val _status = MutableStateFlow(GeminiLiveStatus.DISCONNECTED)
     val status = _status.asStateFlow()
 
-    private val _textStream = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    val textStream = _textStream.asSharedFlow()
+    private val _assistantTextStream = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val assistantTextStream = _assistantTextStream.asSharedFlow()
 
     private val _audioStream = MutableSharedFlow<ByteArray>(extraBufferCapacity = 256)
     val audioStream = _audioStream.asSharedFlow()
 
+    private val _toolCallStream = MutableSharedFlow<GeminiToolCall>(extraBufferCapacity = 16)
+    val toolCallStream = _toolCallStream.asSharedFlow()
+
     private val _interruptedStream = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     val interruptedStream = _interruptedStream.asSharedFlow()
+
+    private val _latencyMs = MutableStateFlow(0)
+    val latencyMs = _latencyMs.asStateFlow()
+
+    private var lastSendTime = 0L
 
     private var okHttpClient: OkHttpClient? = null
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
     /**
-     * Establishes a real-time WebSocket connection to the Gemini Multimodal Live API
-     * using the API key loaded fromBuildConfig (which is sourced from the environment variables).
+     * Establishes a real-time WebSocket connection to the Gemini Multimodal Live API.
      */
-    fun connect() {
-        if (_status.value == ConnectionStatus.CONNECTED || _status.value == ConnectionStatus.CONNECTING) {
+    fun connect(apiKey: String) {
+        if (_status.value == GeminiLiveStatus.CONNECTED || _status.value == GeminiLiveStatus.CONNECTING) {
             Log.d(tag, "Client is already connecting or connected.")
             return
         }
 
-        val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            Log.e(tag, "API Key is missing or invalid in BuildConfig.")
-            _status.value = ConnectionStatus.ERROR
+            Log.e(tag, "API Key is missing or invalid.")
+            _status.value = GeminiLiveStatus.ERROR
             return
         }
 
-        _status.value = ConnectionStatus.CONNECTING
+        _status.value = GeminiLiveStatus.CONNECTING
 
         okHttpClient = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -75,8 +74,8 @@ class GeminiMultimodalClient {
 
         webSocket = okHttpClient?.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(tag, "WebSocket connection successfully opened.")
-                _status.value = ConnectionStatus.CONNECTED
+                Log.d(tag, "WebSocket connection successfully opened via GeminiMultimodalClient.")
+                _status.value = GeminiLiveStatus.CONNECTED
                 sendSetupFrame(webSocket)
             }
 
@@ -97,8 +96,7 @@ class GeminiMultimodalClient {
     }
 
     /**
-     * Sends the initial setup frame to the Gemini Live session configuring the model,
-     * voice modalities, and options.
+     * Sends the initial setup frame to configure the Gemini Multimodal Live session.
      */
     private fun sendSetupFrame(ws: WebSocket) {
         try {
@@ -108,6 +106,127 @@ class GeminiMultimodalClient {
                     put("generationConfig", JSONObject().apply {
                         put("responseModalities", JSONArray().apply {
                             put("AUDIO")
+                        })
+                    })
+                    put("systemInstruction", JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("text", "You are SIYA, a super-fast, low-latency, real-time voice-to-voice Android assistant. Speak in short, conversational Hindi or Hinglish. You have access to the MYRA Device Automation tools. Use them whenever the user asks you to perform actions on their phone. Keep your voice replies quick and helpful.")
+                            })
+                        })
+                    })
+                    put("tools", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("functionDeclarations", JSONArray().apply {
+                                put(JSONObject().apply {
+                                    put("name", "openApp")
+                                    put("description", "Opens an app on the user's device. Supports: youtube, whatsapp, chrome, settings, camera.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("name", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "The name of the app to open.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("name") })
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "clickText")
+                                    put("description", "Clicks/Taps a specific text element visible on the screen using OCR/Accessibility.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("text", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "The text element to click.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("text") })
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "typeText")
+                                    put("description", "Types specific text into the active text/input field.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("text", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "The text content to type.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("text") })
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "performSwipe")
+                                    put("description", "Performs a swipe gesture on the screen.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("direction", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "The direction to swipe, either 'up' or 'down'.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("direction") })
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "goBack")
+                                    put("description", "Goes back to the previous screen (hardware back).")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject())
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "controlVolume")
+                                    put("description", "Adjusts the device volume.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("action", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "Direction to change volume: 'up' or 'down'.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("action") })
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "toggleFlashlight")
+                                    put("description", "Toggles the device flashlight on or off.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject())
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "getBatteryLevel")
+                                    put("description", "Retrieves the current battery level percentage.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject())
+                                    })
+                                })
+                                put(JSONObject().apply {
+                                    put("name", "makeCall")
+                                    put("description", "Makes a dial phone call to a matching contact name.")
+                                    put("parameters", JSONObject().apply {
+                                        put("type", "OBJECT")
+                                        put("properties", JSONObject().apply {
+                                            put("contactName", JSONObject().apply {
+                                                put("type", "STRING")
+                                                put("description", "The name of the contact to call.")
+                                            })
+                                        })
+                                        put("required", JSONArray().apply { put("contactName") })
+                                    })
+                                })
+                            })
                         })
                     })
                 })
@@ -120,9 +239,15 @@ class GeminiMultimodalClient {
     }
 
     /**
-     * Parse incoming messages from the Gemini Live API WebSocket stream.
+     * Parses incoming messages from the Gemini Live API WebSocket stream.
      */
     private fun parseServerMessage(text: String) {
+        if (lastSendTime > 0L) {
+            val rtt = (System.currentTimeMillis() - lastSendTime).toInt()
+            if (rtt in 10..2000) {
+                _latencyMs.value = if (_latencyMs.value == 0) rtt else (_latencyMs.value * 0.7 + rtt * 0.3).toInt()
+            }
+        }
         try {
             val json = JSONObject(text)
             if (json.has("serverContent")) {
@@ -135,7 +260,7 @@ class GeminiMultimodalClient {
                             val part = parts.getJSONObject(i)
                             if (part.has("text")) {
                                 val transcript = part.getString("text")
-                                scope.launch { _textStream.emit(transcript) }
+                                scope.launch { _assistantTextStream.emit(transcript) }
                             }
                             if (part.has("inlineData")) {
                                 val inlineData = part.getJSONObject("inlineData")
@@ -150,6 +275,21 @@ class GeminiMultimodalClient {
                     scope.launch { _interruptedStream.emit(Unit) }
                 }
             }
+            if (json.has("toolCall")) {
+                val toolCall = json.getJSONObject("toolCall")
+                val functionCalls = toolCall.optJSONArray("functionCalls")
+                if (functionCalls != null) {
+                    for (i in 0 until functionCalls.length()) {
+                        val call = functionCalls.getJSONObject(i)
+                        val name = call.getString("name")
+                        val id = call.getString("id")
+                        val args = call.optJSONObject("args") ?: JSONObject()
+                        scope.launch {
+                            _toolCallStream.emit(GeminiToolCall(name, id, args))
+                        }
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.e(tag, "Error parsing server message", e)
         }
@@ -159,10 +299,11 @@ class GeminiMultimodalClient {
      * Sends a raw PCM audio chunk to the Gemini Multimodal Live API.
      */
     fun sendAudioChunk(pcmData: ByteArray, length: Int) {
-        if (_status.value != ConnectionStatus.CONNECTED) {
+        if (_status.value != GeminiLiveStatus.CONNECTED) {
             Log.w(tag, "Attempted to send audio chunk while disconnected.")
             return
         }
+        lastSendTime = System.currentTimeMillis()
         try {
             val base64 = Base64.encodeToString(pcmData, 0, length, Base64.NO_WRAP)
             val realtimeInput = JSONObject().apply {
@@ -182,10 +323,39 @@ class GeminiMultimodalClient {
     }
 
     /**
+     * Sends a function execution outcome back to the model.
+     */
+    fun sendToolResponse(name: String, id: String, success: Boolean, message: String) {
+        try {
+            val responseObj = JSONObject().apply {
+                put("toolResponse", JSONObject().apply {
+                    put("functionResponses", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("name", name)
+                            put("id", id)
+                            put("response", JSONObject().apply {
+                                put("output", JSONObject().apply {
+                                    put("status", if (success) "SUCCESS" else "FAILED")
+                                    put("message", message)
+                                })
+                            })
+                        })
+                    })
+                })
+            }
+            webSocket?.send(responseObj.toString())
+        } catch (e: Exception) {
+            Log.e(tag, "Error sending tool response", e)
+        }
+    }
+
+    /**
      * Disconnects and releases the WebSocket connection.
      */
     fun disconnect(isError: Boolean = false) {
-        _status.value = if (isError) ConnectionStatus.ERROR else ConnectionStatus.DISCONNECTED
+        _status.value = if (isError) GeminiLiveStatus.ERROR else GeminiLiveStatus.DISCONNECTED
+        _latencyMs.value = 0
+        lastSendTime = 0L
         try {
             webSocket?.close(1000, "Disconnected")
         } catch (e: Exception) {

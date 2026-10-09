@@ -96,13 +96,13 @@ fun MyraLiveScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Filled.Face,
-                        contentDescription = "MYRA Icon",
+                        contentDescription = "SIYA Icon",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(36.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "MYRA Live",
+                        text = "SIYA Live",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
