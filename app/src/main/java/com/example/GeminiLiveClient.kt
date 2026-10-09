@@ -88,6 +88,8 @@ class GeminiLiveClient(
     }
 
     fun connect() {
+        stop() // Clean up any active session, recording, or collection jobs first
+
         _assistantTranscript.value = "Connecting with MYRA Live..."
         _lastActionLog.value = ""
 
@@ -109,6 +111,21 @@ class GeminiLiveClient(
             launch {
                 repository.assistantTextStream.collect { text ->
                     _assistantTranscript.value = text
+                }
+            }
+
+            // Observe connection status to show friendly messages
+            launch {
+                repository.status.collect { status ->
+                    when (status) {
+                        GeminiLiveStatus.ERROR -> {
+                            _assistantTranscript.value = "API connection failed. Please check your internet, verify your Gemini API Key in Settings, and try starting again."
+                        }
+                        GeminiLiveStatus.DISCONNECTED -> {
+                            _assistantTranscript.value = "Session ended. Tap 'Start Live Session' to connect with MYRA."
+                        }
+                        else -> { /* no-op */ }
+                    }
                 }
             }
 

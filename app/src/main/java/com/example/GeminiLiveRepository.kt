@@ -59,7 +59,7 @@ class GeminiLiveRepository {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     fun connect(apiKey: String) {
-        if (_status.value != GeminiLiveStatus.DISCONNECTED) return
+        if (_status.value == GeminiLiveStatus.CONNECTED || _status.value == GeminiLiveStatus.CONNECTING) return
         _status.value = GeminiLiveStatus.CONNECTING
 
         okHttpClient = OkHttpClient.Builder()
@@ -90,8 +90,7 @@ class GeminiLiveRepository {
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(tag, "WebSocket connection failed", t)
-                _status.value = GeminiLiveStatus.ERROR
-                disconnect()
+                disconnect(isError = true)
             }
         })
     }
@@ -100,7 +99,7 @@ class GeminiLiveRepository {
         try {
             val setupObj = JSONObject().apply {
                 put("setup", JSONObject().apply {
-                    put("model", "models/gemini-2.5-flash-native-audio-preview-12-2025")
+                    put("model", "models/gemini-3.8-live")
                     put("generationConfig", JSONObject().apply {
                         put("responseModalities", JSONArray().apply {
                             put("AUDIO")
@@ -329,8 +328,8 @@ class GeminiLiveRepository {
         }
     }
 
-    fun disconnect() {
-        _status.value = GeminiLiveStatus.DISCONNECTED
+    fun disconnect(isError: Boolean = false) {
+        _status.value = if (isError) GeminiLiveStatus.ERROR else GeminiLiveStatus.DISCONNECTED
         _latencyMs.value = 0
         lastSendTime = 0L
         try {
