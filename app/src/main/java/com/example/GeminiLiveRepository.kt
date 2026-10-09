@@ -69,7 +69,7 @@ class GeminiLiveRepository {
             .pingInterval(15, TimeUnit.SECONDS)
             .build()
 
-        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$apiKey"
+        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey"
         val request = Request.Builder().url(url).build()
 
         webSocket = okHttpClient?.newWebSocket(request, object : WebSocketListener() {
@@ -99,7 +99,7 @@ class GeminiLiveRepository {
         try {
             val setupObj = JSONObject().apply {
                 put("setup", JSONObject().apply {
-                    put("model", "models/gemini-3.8-live")
+                    put("model", "models/gemini-2.0-flash-exp")
                     put("generationConfig", JSONObject().apply {
                         put("responseModalities", JSONArray().apply {
                             put("AUDIO")
